@@ -1,0 +1,3 @@
+# Hanya folder input video & output crop — sisanya di-commit ke GitHub
+python test/input_videos/
+python test/output_cropped_faces/

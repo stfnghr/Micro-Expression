@@ -1,0 +1,14 @@
+# Dependensi minimal — Tahap 1 Ekstraksi Wajah (YOLOv5m-Face)
+# PENTING: numpy HARUS < 2.0 agar kompatibel dengan torch 2.1.x
+
+numpy>=1.23.5,<2.0
+scipy>=1.10.0,<1.14.0
+opencv-python>=4.8.0
+torch>=2.0.0
+torchvision>=0.15.0
+pandas>=1.5.0
+tqdm>=4.64.0
+PyYAML>=6.0
+matplotlib>=3.7.0
+Pillow>=9.5.0
+notebook>=7.0.0
