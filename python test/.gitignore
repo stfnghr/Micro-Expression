@@ -1,3 +1,20 @@
-# Hanya folder input video & output crop
+# macOS, Python, Jupyter, dan environment lokal
+.DS_Store
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+microsense/
+
+# Dataset lokal
+dataset/
+dataset 1/
+
+# Input dan output pipeline
 input_videos/
 output_cropped_faces/
+
+# Checkpoint hasil training
+*.pth

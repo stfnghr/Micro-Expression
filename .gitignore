@@ -1,3 +1,22 @@
-# Hanya folder input video & output crop — sisanya di-commit ke GitHub
+# macOS
+.DS_Store
+
+# Python, Jupyter, dan environment lokal
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+microsense/
+
+# Dataset lokal
+python test/dataset/
+python test/dataset 1/
+
+# Input dan output pipeline
 python test/input_videos/
 python test/output_cropped_faces/
+
+# Checkpoint hasil training (weights YOLO .pt tetap dikelola melalui Git LFS)
+*.pth
