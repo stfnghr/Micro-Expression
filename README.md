@@ -1,327 +1,450 @@
 # Facial Micro-Expression Recognition
 
-Repositori ini merupakan implementasi bertahap sistem **Facial Micro-Expression Recognition** untuk Tugas Akhir. Fokus pengembangan saat ini adalah membangun fondasi ekstraksi representasi spasial wajah melalui deteksi dan alignment wajah berbasis **YOLOv5-Face**, kemudian melakukan transfer learning menggunakan **ResNet-18 pre-trained ImageNet** pada dataset macro-expression FER2013.
+Proyek skripsi ini membandingkan **tiga arsitektur deep learning** untuk klasifikasi mikro-ekspresi wajah pada dataset **SMIC** (Spontaneous Micro-Expression Corpus), modalitas **HS** (High Speed).
 
-Pre-training pada FER2013 digunakan untuk menginisialisasi model agar mampu mempelajari pola spasial dasar ekspresi wajah—seperti perubahan pada mata, alis, hidung, dan mulut—sebelum dikembangkan menjadi sistem spatiotemporal yang menangkap perubahan mikro-ekspresi antar-frame. Implementasi tersedia dalam bentuk Jupyter Notebook agar setiap tahap mudah direproduksi, diamati, dan dijelaskan untuk kebutuhan penelitian.
+Tujuannya bukan sekadar “melatih model”, melainkan menjawab pertanyaan metodologis:
 
-## Status Pengembangan
+> Representasi mana yang paling andal untuk mikro-ekspresi — **graf Face Mesh (ST-GCN)**, **volume video 3D (R3D-18)**, atau **peta Optical Flow (ViT)** — jika ketiganya dievaluasi dengan protokol yang **sama**, yaitu **Leave-One-Subject-Out (LOSO)**?
 
-- [x] Deteksi wajah menggunakan YOLOv5m-Face
-- [x] Pemetaan koordinat deteksi ke resolusi frame asli
-- [x] Ekstraksi ROI wajah dengan safe padding dan boundary clamping
-- [x] Visualisasi bounding box dan lima facial landmarks
-- [x] Face alignment berdasarkan kemiringan kedua mata
-- [x] Data preprocessing dan augmentasi FER2013
-- [x] Baseline ResNet-18 dengan transfer learning ImageNet
-- [x] Penyimpanan checkpoint berdasarkan validation accuracy terbaik
-- [ ] Evaluasi lanjutan pada dataset mikro-ekspresi
-- [ ] Pemodelan dinamika temporal antar-frame
+LOSO dipakai agar klip orang yang sama tidak pernah muncul di data latih dan data uji sekaligus (**Subject Leakage**). Split acak 80/20 tidak sah pada SMIC karena satu subjek (misalnya `s3`) dapat memiliki puluhan klip.
 
-## Arsitektur dan Pipeline Sistem
-
-Pipeline yang telah diimplementasikan saat ini:
-
-```text
-Video / Gambar Wajah
-        │
-        ▼
-YOLOv5-Face
-  ├─ Face detection
-  ├─ Bounding box
-  └─ 5 facial landmarks
-        │
-        ▼
-Face Pre-processing
-  ├─ Coordinate rescaling (letterbox → frame asli)
-  ├─ Safe padding dan square crop
-  ├─ Boundary clamping
-  └─ Face alignment berdasarkan posisi mata
-        │
-        ▼
-ROI Wajah 224 × 224
-        │
-        ▼
-ResNet-18 Pre-trained ImageNet
-  ├─ Spatial feature extraction
-  └─ Klasifikasi 7 emosi FER2013
-        │
-        ▼
-Fondasi Feature Extractor Spasial
-        │
-        ▼
-Tahap Selanjutnya: Pemodelan Spatiotemporal
-```
-
-### 1. Deteksi dan Alignment Wajah
-
-Tahap preprocessing menggunakan **YOLOv5m-Face**, yaitu varian YOLOv5 yang dirancang khusus untuk deteksi wajah dan regresi lima titik landmark:
-
-1. mata kiri,
-2. mata kanan,
-3. hidung,
-4. sudut bibir kiri, dan
-5. sudut bibir kanan.
-
-Frame video diproses menggunakan letterbox pada resolusi inferensi, kemudian koordinat bounding box dipetakan kembali ke resolusi frame asli dengan memperhitungkan `gain` dan `pad`. ROI wajah diperluas menggunakan padding proporsional, dibentuk menjadi crop persegi, dan dibatasi agar tetap berada di dalam dimensi frame.
-
-Face alignment dilakukan dengan menghitung sudut garis antara kedua mata. Crop wajah kemudian dirotasi hingga posisi mata sejajar secara horizontal. Kanvas rotasi diperluas dan diberi padding hitam agar bagian wajah tidak terpotong.
-
-### 2. Pre-training Spasial dengan ResNet-18
-
-Baseline spasial menggunakan **ResNet-18 pre-trained ImageNet**. Lapisan fully connected terakhir dimodifikasi agar menghasilkan tujuh kelas FER2013:
-
-```text
-anger, disgust, fear, happy, neutral, sad, surprised
-```
-
-FER2013 digunakan sebagai tahap pre-training karena menyediakan variasi ekspresi makro dalam jumlah besar. Model mempelajari representasi spasial ekspresi wajah terlebih dahulu sebelum bobot atau fitur tersebut ditransfer ke dataset mikro-ekspresi yang memiliki jumlah sampel lebih terbatas.
-
-Konfigurasi baseline:
-
-- **Input:** RGB 3-channel, `224 × 224`
-- **Backbone:** ResNet-18
-- **Pre-trained weights:** ImageNet-1K V1
-- **Loss:** Cross-Entropy Loss
-- **Optimizer:** Adam
-- **Learning rate awal:** `0.001`
-- **Weight decay:** `1e-4`
-- **Scheduler:** ReduceLROnPlateau
-- **Scheduler mode:** `max`
-- **Scheduler factor:** `0.5`
-- **Scheduler patience:** `2`
-- **Batch size:** `32`
-- **Checkpoint:** model dengan validation accuracy tertinggi
-
-## Struktur Direktori
-
-```text
-Micro-Expression-Detector/
-├── README.md
-├── .gitignore
-├── .gitattributes                     # Konfigurasi Git LFS untuk weights .pt
-└── python test/
-    ├── README.md                      # Dokumentasi singkat Tahap 1
-    ├── requirements.txt               # Dependensi Python
-    ├── micro_expression_pipeline.ipynb
-    │                                  # Deteksi, crop, landmark, dan alignment wajah
-    ├── fer2013_spatial_pretraining.ipynb
-    │                                  # DataLoader FER2013 dan baseline ResNet-18
-    ├── yolov5m-face.pt                # Weights YOLOv5-Face (Git LFS)
-    ├── yolov5-face/                   # Source code YOLOv5-Face
-    ├── input_videos/                  # Video input lokal (diabaikan Git)
-    ├── output_cropped_faces/          # Hasil ROI dan video anotasi (diabaikan Git)
-    ├── dataset 1/                     # Dataset lokal FER2013/CK+ (diabaikan Git)
-    └── resnet18_best_baseline.pth     # Checkpoint training lokal (diabaikan Git)
-```
-
-Dataset dan checkpoint training tidak didistribusikan melalui repositori karena ukuran file, lisensi dataset, dan kebutuhan reproduksi eksperimen yang berbeda.
-
-## Prasyarat
-
-Lingkungan yang disarankan:
-
-- Python 3.10 atau lebih baru
-- Jupyter Notebook
-- PyTorch
-- torchvision
-- OpenCV
-- NumPy `< 2.0` untuk kompatibilitas dengan PyTorch 2.1.x
-- SciPy
-- pandas
-- matplotlib
-- Pillow
-- tqdm
-- PyYAML
-- Git LFS
-
-Perangkat komputasi yang didukung:
-
-- **CUDA** untuk GPU NVIDIA
-- **MPS** untuk Apple Silicon
-- **CPU** sebagai fallback
-
-> Pada pipeline YOLOv5-Face di Apple Silicon, inferensi deteksi dijalankan melalui CPU untuk menghindari pergeseran koordinat numerik yang ditemukan pada backend MPS. Training ResNet-18 tetap dapat menggunakan MPS.
-
-## Instalasi
-
-### 1. Clone repositori
-
-Weights `yolov5m-face.pt` disimpan menggunakan Git LFS. Pastikan Git LFS sudah tersedia.
-
-```bash
-git lfs install
-git clone https://github.com/stfnghr/Micro-Expression.git
-cd Micro-Expression
-```
-
-### 2. Buat virtual environment
-
-Menggunakan `venv`:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-Atau menggunakan Conda:
-
-```bash
-conda create -n micro-expression python=3.10
-conda activate micro-expression
-```
-
-### 3. Instal dependensi
-
-```bash
-pip install -r "python test/requirements.txt"
-```
-
-### 4. Jalankan Jupyter Notebook
-
-```bash
-cd "python test"
-jupyter notebook
-```
-
-## Persiapan Dataset
-
-Dataset tidak disertakan di dalam repositori. Untuk menjalankan pre-training, letakkan FER2013 dalam struktur folder yang kompatibel dengan `torchvision.datasets.ImageFolder`.
-
-Struktur umum yang direkomendasikan:
-
-```text
-dataset/fer2013/
-├── train/
-│   ├── anger/
-│   ├── disgust/
-│   ├── fear/
-│   ├── happy/
-│   ├── neutral/
-│   ├── sad/
-│   └── surprised/
-└── test/
-    ├── anger/
-    ├── disgust/
-    ├── fear/
-    ├── happy/
-    ├── neutral/
-    ├── sad/
-    └── surprised/
-```
-
-Pada konfigurasi lokal saat pengembangan, dataset berada di:
-
-```text
-python test/dataset 1/fer2013/fer2013/Training/
-```
-
-Jika folder test terpisah tidak tersedia, notebook melakukan fallback split train/validation sebesar **80:20** menggunakan random seed tetap untuk menjaga reproduktibilitas. Path dataset dapat diubah melalui variabel `DATASET_ROOT`, `TRAIN_DIR`, dan `TEST_DIR` pada cell konfigurasi.
-
-## Panduan Penggunaan
-
-### Tahap 1 — Preprocessing dan Face Alignment
-
-1. Letakkan video pada:
-
-   ```text
-   python test/input_videos/
-   ```
-
-2. Buka `micro_expression_pipeline.ipynb`.
-3. Jalankan seluruh cell secara berurutan.
-4. Notebook akan:
-   - memuat YOLOv5m-Face,
-   - mendeteksi wajah dan lima landmarks,
-   - memetakan koordinat ke frame asli,
-   - memilih kandidat wajah utama,
-   - memberi safe padding,
-   - melakukan face alignment,
-   - mengubah ukuran ROI menjadi `224 × 224`, dan
-   - menyimpan hasil ekstraksi.
-
-Output:
-
-```text
-output_cropped_faces/<nama_video>/
-├── frame_0000.jpg
-├── frame_0001.jpg
-├── ...
-└── video_asli_with_bbox.mp4
-```
-
-### Tahap 2 — Data Pipeline dan Baseline ResNet-18
-
-1. Pastikan dataset FER2013 sudah tersedia.
-2. Buka `fer2013_spatial_pretraining.ipynb`.
-3. Jalankan cell secara berurutan:
-   - konfigurasi path dan hyperparameter,
-   - transforms dan augmentasi,
-   - pemuatan dataset dengan `ImageFolder`,
-   - pembuatan DataLoader,
-   - visualisasi sanity check,
-   - inisialisasi ResNet-18, dan
-   - training serta validasi.
-4. Checkpoint terbaik disimpan sebagai:
-
-   ```text
-   resnet18_best_baseline.pth
-   ```
-
-Augmentasi training yang digunakan:
-
-- resize ke `224 × 224`,
-- random horizontal flip (`p=0.5`),
-- random rotation (`±10°`),
-- konversi grayscale menjadi RGB 3-channel,
-- normalisasi mean dan standard deviation ImageNet.
-
-Data validasi tidak menerima augmentasi acak agar evaluasi konsisten.
-
-## Hasil Evaluasi Baseline
-
-Baseline ResNet-18 mencapai:
-
-| Model | Dataset | Pre-training | Validation Accuracy |
-|---|---|---|---:|
-| ResNet-18 | FER2013 | ImageNet-1K V1 | **±60,94%** |
-
-Hasil tersebut digunakan sebagai **sanity check** bahwa pipeline preprocessing, augmentasi, DataLoader, transfer learning, dan training loop telah bekerja dengan benar. Nilai ini belum merupakan performa akhir sistem mikro-ekspresi karena evaluasi masih dilakukan pada dataset macro-expression FER2013.
-
-## Roadmap
-
-### Tahap berikutnya
-
-- [ ] Mengintegrasikan dataset mikro-ekspresi **CASME II** dan/atau **SAMM**
-- [ ] Menstandarkan pembagian data berbasis subjek untuk mencegah subject leakage
-- [ ] Mengekstraksi perubahan gerak halus menggunakan **Optical Flow**
-- [ ] Membangun representasi onset–apex–offset
-- [ ] Melakukan transfer learning dari baseline FER2013 ke data mikro-ekspresi
-- [ ] Mengevaluasi ketidakseimbangan kelas dengan weighted loss atau sampling strategy
-- [ ] Menambahkan confusion matrix, precision, recall, macro-F1, dan UAR
-
-### Kandidat arsitektur lanjutan
-
-- **3D-CNN** untuk mempelajari fitur spasial dan temporal secara bersamaan
-- **Vision Transformer (ViT)** untuk menangkap hubungan global antarwilayah wajah
-- **Graph Convolutional Network (GCN)** untuk memodelkan relasi antar-landmark atau facial action regions
-- Kombinasi **CNN + Optical Flow** untuk menonjolkan perubahan gerak mikro
-
-## Keterbatasan Saat Ini
-
-- Baseline baru dievaluasi pada ekspresi makro FER2013.
-- ResNet-18 saat ini terutama mempelajari informasi spasial satu frame.
-- Dinamika temporal mikro-ekspresi belum dimodelkan.
-- Performa dapat dipengaruhi ketidakseimbangan kelas FER2013.
-- Validasi akhir perlu menggunakan protokol evaluasi berbasis subjek pada dataset mikro-ekspresi.
-
-## Acknowledgements
-
-Implementasi deteksi wajah menggunakan arsitektur dari proyek open-source [deepcam-cn/yolov5-face](https://github.com/deepcam-cn/yolov5-face). Backbone klasifikasi menggunakan ResNet-18 dari `torchvision.models` dengan bobot pre-trained ImageNet.
-
-## Lisensi dan Penggunaan Data
-
-Kode penelitian mengikuti ketentuan lisensi dependensi dan source code pihak ketiga yang disertakan. Dataset FER2013, CK+, CASME II, dan SAMM harus diperoleh melalui sumber resmi serta digunakan sesuai lisensi masing-masing.
+Workspace eksperimen yang aktif ada di direktori **`python test/`**. README root repositori yang lama (YOLOv5-Face + FER2013) **tidak lagi berlaku**.
 
 ---
 
-Repositori ini dikembangkan untuk kepentingan akademis dan penelitian Tugas Akhir mengenai **Facial Micro-Expression Recognition**.
+## Daftar Isi
+
+1. [Ringkasan eksperimen](#1-ringkasan-eksperimen)
+2. [Struktur direktori](#2-struktur-direktori)
+3. [Persiapan lingkungan (dari nol)](#3-persiapan-lingkungan-dari-nol)
+4. [Dataset](#4-dataset)
+5. [Protokol evaluasi LOSO](#5-protokol-evaluasi-loso)
+6. [Pipeline per model](#6-pipeline-per-model)
+7. [Urutan eksekusi notebook](#7-urutan-eksekusi-notebook)
+8. [Hasil evaluasi saat ini](#8-hasil-evaluasi-saat-ini)
+9. [Catatan teknis penting](#9-catatan-teknis-penting)
+10. [Dependensi](#10-dependensi)
+
+---
+
+## 1. Ringkasan eksperimen
+
+| Aspek | Ketentuan skripsi |
+|---|---|
+| Dataset uji | SMIC, modalitas **HS**, partisi **micro** saja |
+| Jumlah sampel | **164 klip** dari **16 subjek** |
+| Kelas | 3: **Negative**, **Positive**, **Surprise** |
+| Protokol | **LOSO** — 16 fold, satu subjek penuh ditahan per fold |
+| Metrik | Accuracy, **Macro F1**, **UAR** (Unweighted Average Recall) |
+| Panjang temporal | **T = 16** frame (uniform sampling `np.linspace`) |
+| Seed | `42` pada ketiga pipeline |
+
+Tiga jalur representasi:
+
+| Model | Representasi | Tensor input | Pre-training |
+|---|---|---|---|
+| **ST-GCN** | 468 node MediaPipe Face Mesh | `(N, C, T, V)` = `(8, 3, 16, 468)` | MMEW 7 kelas, lalu transfer ke SMIC |
+| **R3D-18** | Klip RGB 16 frame | `(N, C, T, H, W)` = `(4, 3, 16, 112, 112)` | Kinetics-400 |
+| **ViT-Base** | Satu gambar Optical Flow Farneback | `(N, C, H, W)` = `(16, 3, 224, 224)` | ImageNet |
+
+Macro F1 dan UAR wajib dilaporkan karena kelas SMIC **tidak seimbang** (Negative 70, Positive 51, Surprise 43 pada HS/micro). Accuracy saja dapat tampak “baik” hanya dengan menebak kelas mayoritas.
+
+---
+
+## 2. Struktur direktori
+
+Seluruh kode, checkpoint, dan data eksperimen berada di `python test/`. Notebook **harus dijalankan dari folder miliknya sendiri** karena path dataset bersifat relatif (`../dataset/...`).
+
+```text
+python test/
+├── requirements.txt
+├── .gitignore
+│
+├── discovery/                          # EDA — tidak ada training
+│   ├── smic_data_discovery.ipynb       # peta SMIC: subjek, kelas, jumlah frame
+│   └── mmew_data_discovery.ipynb       # peta MMEW: mikro (sekuens) vs makro (still)
+│
+├── stgcn/                              # model graf Face Mesh
+│   ├── stgcn_mmew_extraction.ipynb     # MMEW JPG → .npy (16, 468, 3)
+│   ├── stgcn_mmew_pretraining.ipynb    # pre-train 7 kelas MMEW
+│   ├── stgcn_smic_extraction.ipynb     # SMIC BMP → .npy (16, 468, 3)
+│   ├── stgcn_smic_training.ipynb       # LOSO SMIC + transfer backbone MMEW
+│   ├── stgcn_mmew_pretrained.pth       # bobot pre-train MMEW
+│   ├── stgcn_best_model.pth            # checkpoint fold terbaik (demo, bukan metrik skripsi)
+│   └── stgcn_mmew_landmarks/           # 300 file .npy MMEW (7 folder emosi)
+│
+├── r3d18/                              # 3D-CNN pada klip video
+│   ├── r3d18_smic_pipeline.ipynb       # dataset 3D + LOSO R3D-18
+│   └── r3d18_best_model.pth
+│
+├── vit/                                # ViT pada gambar Optical Flow
+│   ├── vit_optical_flow_pipeline.ipynb # Farneback + ImageFolder + LOSO ViT
+│   └── vit_best_model.pth
+│
+└── dataset/                            # data mentah + hasil ekstraksi bersama
+    ├── SMIC_all_cropped/               # frame BMP ter-crop & registrasi
+    │   ├── HS/                         # ★ modalitas eksperimen
+    │   ├── NIR/
+    │   └── VIS/
+    ├── MMEW/
+    │   ├── Micro_Expression/           # 300 sekuens JPG (dipakai ST-GCN)
+    │   └── Macro_Expression/           # still image (tidak dilatih)
+    ├── stgcn_smic_landmarks/           # 164 .npy graf SMIC
+    │   ├── Negative/
+    │   ├── Positive/
+    │   └── Surprise/
+    └── vit_optical_flow_frames/        # 164 JPG flow untuk ImageFolder
+        ├── Negative/
+        ├── Positive/
+        └── Surprise/
+```
+
+### Peran tiap folder
+
+| Folder | Peran |
+|---|---|
+| `discovery/` | Memahami struktur data **sebelum** model dilatih. Output: DataFrame indeks, bukan `.pth`. |
+| `stgcn/` | Satu arsitektur, dua dataset: ekstraksi + pre-train MMEW, lalu LOSO SMIC. |
+| `r3d18/` | Pipeline 3D-CNN mandiri. Membaca frame BMP langsung dari `dataset/SMIC_all_cropped/`. |
+| `vit/` | Pipeline Optical Flow + ViT mandiri. Menulis JPG ke `dataset/vit_optical_flow_frames/`. |
+| `dataset/` | Satu atap untuk data mentah dan fitur hasil ekstraksi yang dipakai lintas notebook. |
+
+Folder `dataset/` dan file `*.pth` diabaikan Git (lihat `.gitignore`) karena ukurannya besar. Setelah clone, dataset harus diletakkan manual ke `python test/dataset/`.
+
+---
+
+## 3. Persiapan lingkungan (dari nol)
+
+Eksperimen ini dijalankan pada **Conda environment** bernama `microsense`, dengan kernel Jupyter yang sama. Langkah di bawah ini cukup untuk komputer baru (macOS, Linux, atau Windows + Anaconda).
+
+### 3.1 Pasang Conda dan buat environment
+
+```bash
+conda create -n microsense python=3.11 -y
+conda activate microsense
+```
+
+Python 3.11 dipilih agar kompatibel dengan PyTorch 2.x, MediaPipe, dan `timm`. Jangan memakai Python 3.13 untuk pipeline ini.
+
+### 3.2 Masuk ke folder eksperimen dan pasang dependensi
+
+```bash
+cd "/path/ke/Micro-Expression-Detector/python test"
+pip install -r requirements.txt
+```
+
+`requirements.txt` memaksa **`numpy>=1.23.5,<2.0`**. Numpy 2.x memecah kompatibilitas dengan PyTorch 2.1.x dan beberapa binary MediaPipe.
+
+Paket kunci yang terpasang:
+
+- `torch` / `torchvision` — model, DataLoader, checkpoint
+- `timm` — `vit_base_patch16_224`
+- `mediapipe` — Face Mesh 468 titik
+- `opencv-python` — baca frame, Farneback, konversi warna
+- `scikit-learn` — `LeaveOneGroupOut`, Macro F1, UAR
+- `notebook` — menjalankan `.ipynb`
+
+### 3.3 Daftarkan kernel Jupyter
+
+```bash
+python -m ipykernel install --user --name microsense --display-name "Python (microsense)"
+```
+
+Pada setiap notebook, pilih kernel **`Python (microsense)`** atau **`microsense`**. Jangan menjalankan sel di kernel `base` Anaconda.
+
+### 3.4 Letakkan dataset
+
+Salin data ke lokasi berikut (nama folder harus persis):
+
+```text
+python test/dataset/SMIC_all_cropped/
+python test/dataset/MMEW/
+```
+
+Struktur SMIC yang diharapkan:
+
+```text
+SMIC_all_cropped/HS/{subjek}/micro/{negative|positive|surprise}/{id_klip}/reg_*.bmp
+```
+
+Contoh: `HS/s1/micro/negative/s1_ne_01/reg_00001.bmp`.
+
+Struktur MMEW yang diharapkan:
+
+```text
+MMEW/Micro_Expression/{anger|disgust|fear|happiness|others|sadness|surprise}/{Sxx-yy-zzz}/*.jpg
+```
+
+Tanpa dua folder ini, cell pertama setiap notebook akan menaikkan `FileNotFoundError`.
+
+### 3.5 Verifikasi perangkat
+
+Notebook mendeteksi perangkat secara otomatis, urutan prioritas:
+
+1. **CUDA** (NVIDIA)
+2. **MPS** (Apple Silicon)
+3. **CPU**
+
+Tidak perlu mengubah kode. Pastikan hanya **satu notebook training** yang berjalan pada GPU/MPS pada satu waktu agar tidak kehabisan memori.
+
+### 3.6 Buka Jupyter
+
+```bash
+conda activate microsense
+cd "/path/ke/Micro-Expression-Detector/python test"
+jupyter notebook
+```
+
+Kemudian buka notebook dari subfoldernya (`discovery/`, `stgcn/`, `r3d18/`, `vit/`). Jupyter menetapkan working directory ke folder notebook, sehingga path `../dataset/...` tetap benar.
+
+---
+
+## 4. Dataset
+
+### 4.1 SMIC (dataset uji skripsi)
+
+| Properti | Nilai |
+|---|---|
+| Modalitas yang dipakai | **HS** saja |
+| Partisi | **micro** saja (`non_micro` dibuang) |
+| Subjek | 16 (`s1` … `s16`) |
+| Klip | 164 |
+| Kelas | Negative, Positive, Surprise |
+| Format lokal | Folder frame `.bmp` hasil crop + registrasi (`reg_*.bmp`) |
+| Kode nama klip | `ne` → Negative, `po` → Positive, `sur` → Surprise |
+
+NIR dan VIS **tidak dicampur** ke eksperimen. Keduanya dapat merekam kejadian yang sama (pasangan kamera). Mencampur modalitas tanpa grouping event akan menduplikasi sampel dan merusak evaluasi.
+
+Unit sampel adalah **satu folder klip**, bukan satu file BMP. Menjadikan setiap frame sebagai sampel independen menghancurkan informasi temporal dan menggandakan label.
+
+### 4.2 MMEW (hanya untuk pre-training ST-GCN)
+
+| Properti | Nilai |
+|---|---|
+| Partisi yang dipakai | **Micro_Expression** (300 sekuens) |
+| Partisi yang diabaikan | **Macro_Expression** (still image, tanpa sumbu waktu) |
+| Kelas | 7: anger, disgust, fear, happiness, others, sadness, surprise |
+| Resolusi tipikal | 231 × 231 (wajah sudah di-crop) |
+
+Akurasi 43% pada pre-training MMEW adalah **akurasi training-set**, bukan metrik skripsi. Yang dilaporkan ke penguji adalah metrik **global LOSO SMIC**.
+
+---
+
+## 5. Protokol evaluasi LOSO
+
+**Leave-One-Subject-Out** diimplementasikan dengan `sklearn.model_selection.LeaveOneGroupOut`.
+
+Untuk setiap fold \(k = 1 \ldots 16\):
+
+1. Seluruh klip milik subjek \(s_k\) menjadi **validasi**.
+2. Klip 15 subjek lain menjadi **latihan**.
+3. Model, optimizer, dan scheduler **dibuat ulang dari nol** (`create_fresh_model*`). Tanpa reset ini, bobot fold sebelumnya merembes (**weight leakage**) dan LOSO tidak sah.
+4. Training berjalan **15 epoch**. Prediksi yang dikumpulkan adalah prediksi **epoch terakhir**, bukan epoch dengan Val F1 terbaik. Memilih epoch terbaik dari data validasi fold itu sendiri menghasilkan skor yang terlalu optimistis.
+5. Prediksi 16 fold diakumulasi menjadi 164 pasangan \((y, \hat{y})\).
+6. Accuracy, Macro F1, dan UAR dihitung **sekali** pada 164 prediksi itu (bukan rata-rata metrik per fold). Rata-rata per fold menyesatkan karena beberapa subjek hanya memiliki 1–2 kelas.
+
+**Subject Leakage** = klip orang yang sama ada di train dan test. Model lalu “mengenali identitas”, bukan ekspresi. LOSO menutup celah itu.
+
+Checkpoint `*_best_model.pth` menyimpan fold dengan akurasi validasi tertinggi **hanya untuk inferensi demo**. Sumber angka skripsi adalah akumulasi LOSO, bukan checkpoint tersebut.
+
+---
+
+## 6. Pipeline per model
+
+### 6.1 ST-GCN (graf Face Mesh)
+
+ST-GCN tidak melihat piksel. Setiap wajah menjadi **graf**: 468 titik MediaPipe Face Mesh sebagai **node**, koneksi `FACEMESH_TESSELATION` sebagai **edge**.
+
+**Alur lengkap:**
+
+1. **Ekstraksi MMEW** (`stgcn_mmew_extraction.ipynb`)
+   - Ambil sekuens di `MMEW/Micro_Expression/`.
+   - Uniform sampling `np.linspace` menjadi tepat **16 frame**.
+   - MediaPipe Face Mesh: `static_image_mode=True`, `max_num_faces=1`, `refine_landmarks=False` (tetap 468 node, bukan 478 iris).
+   - Fallback: jika satu frame gagal, salin koordinat frame valid terdekat. Tensor nol tidak disimpan.
+   - Simpan `.npy` berbentuk `(T, V, C) = (16, 468, 3)`.
+
+2. **Ekstraksi SMIC** (`stgcn_smic_extraction.ipynb`)
+   - Proses identik pada BMP HS/micro.
+   - `min_detection_confidence=0.3` karena crop SMIC sangat ketat (default 0.5 terlalu sering gagal).
+   - Output: `dataset/stgcn_smic_landmarks/{Negative,Positive,Surprise}/`.
+
+3. **Pre-training MMEW** (`stgcn_mmew_pretraining.ipynb`)
+   - `.npy` di-permute `(T, V, C) → (C, T, V)` agar `Conv2d` melihat peta waktu × node.
+   - Batch DataLoader: `(N, C, T, V)`.
+   - Adjacency dinormalisasi: \(\hat{A} = D^{-1/2}(A+I)D^{-1/2}\). Self-loop \(I\) menjaga fitur node sendiri; \(D^{-1/2}\) mencegah node padat (mulut, mata) mendominasi.
+   - 3 blok GraphConv + TemporalConv, kepala `fc` 7 kelas.
+   - Adam `lr=1e-3`, `weight_decay=1e-4`, 25 epoch, batch 16.
+   - Pose Normalization **dimatikan** (wajah MMEW/SMIC sudah ter-crop/registrasi).
+   - Simpan `stgcn_mmew_pretrained.pth`.
+
+4. **Fine-tuning LOSO SMIC** (`stgcn_smic_training.ipynb`)
+   - Arsitektur identik, kepala `fc` **3 kelas**.
+   - Transfer: buang kunci `fc.*` (ukuran `(7, 128)` vs `(3, 128)`). `strict=False` **saja tidak cukup** — PyTorch tetap error jika kunci yang sama berbeda ukuran.
+   - Adam `lr=1e-3`, batch 8, 15 epoch per fold, 16 fold.
+   - Metrik global dari 164 prediksi epoch terakhir.
+
+**Notasi tensor (wajib sidang):** file `.npy` = `(T, V, C)`; model = `(C, T, V)`; batch = `(N, C, T, V)` dengan \(N\)=batch, \(C=3\) koordinat \((x,y,z)\), \(T=16\) waktu, \(V=468\) node.
+
+### 6.2 R3D-18 (3D-CNN)
+
+R3D-18 melihat **volume piksel** sepanjang ruang dan waktu. Backbone ResNet-18 3D diinisialisasi dari **Kinetics-400** (aksi manusia), bukan mikro-ekspresi — tetapi filter 3D sudah peka gerak.
+
+**Alur lengkap:**
+
+1. Bangun indeks klip `HS/{subjek}/micro/{emosi}/{klip}`.
+2. Urutkan frame **numerik** (`reg_10.bmp` setelah `reg_2.bmp`, bukan urutan alfabet).
+3. Uniform sampling 16 frame dengan `np.linspace`.
+4. Resize spasial **112 × 112** (bukan 224: volume 5D `C×T×H×W` pada 224 memicu OOM di Apple Silicon).
+5. Normalisasi ImageNet mean/std agar distribusi RGB sesuai pre-training Kinetics.
+6. `torch.stack` → `(T, C, H, W)`, lalu `permute` → `(C, T, H, W)` sesuai `torchvision.models.video.r3d_18`.
+7. Ganti `model.fc` dari 400 kelas Kinetics menjadi **3 kelas SMIC**.
+8. Fine-tune Adam **`lr=1e-4`** (10× lebih kecil dari ST-GCN from-scratch agar filter Kinetics tidak rusak), `weight_decay=1e-4`, batch 4, 15 epoch/fold, LOSO.
+
+### 6.3 ViT (Optical Flow + Vision Transformer)
+
+ViT-Base menerima **satu gambar 2D**, bukan video. Gerak temporal dikompresi menjadi warna Optical Flow.
+
+**Alur lengkap:**
+
+1. Pada setiap klip SMIC, ambil **onset** = frame ke-0 dan **apex proksi** = frame tengah (`len // 2`). Anotasi apex resmi tidak tersedia di folder BMP.
+2. Hitung Dense Optical Flow **Farneback** pada grayscale resolusi asli (gerak mikro tidak dihaluskan lebih dulu).
+3. Ubah vektor \((dx, dy)\) ke HSV: **Hue** = arah, **Saturation** = penuh, **Value** = magnitudo. Lalu konversi ke BGR.
+4. Resize **224 × 224** (ukuran native `vit_base_patch16_224`: patch 16×16 → 196 token + 1 CLS).
+5. Simpan `{id_klip}_flow.jpg` di `dataset/vit_optical_flow_frames/{kelas}/` agar `ImageFolder` mengikat label ke nama folder.
+6. Subject ID diparse dari nama file (`s1_ne_01_flow.jpg` → `s1`). LOSO **tidak** memakai `random_split`.
+7. Fine-tune `timm.create_model('vit_base_patch16_224', pretrained=True)`, ganti `model.head` ke 3 kelas.
+8. Adam **`lr=1e-4`**, batch 16, 15 epoch/fold, LOSO.
+
+Farneback dipilih (bukan RAFT) karena tersedia di OpenCV tanpa bobot tambahan dan reprodusibel untuk skripsi.
+
+---
+
+## 7. Urutan eksekusi notebook
+
+Jalankan **berurutan**. Jangan meloncat ke training sebelum ekstraksi selesai. Kernel: `microsense`.
+
+### Tahap A — pahami data (wajib, sekali)
+
+| Urutan | Notebook | Folder kerja |
+|---:|---|---|
+| 1 | `smic_data_discovery.ipynb` | `discovery/` |
+| 2 | `mmew_data_discovery.ipynb` | `discovery/` |
+
+Tidak menghasilkan model. Wajib untuk memastikan `subject_id` dan unit sampel benar sebelum LOSO.
+
+### Tahap B — ST-GCN (empat notebook)
+
+| Urutan | Notebook | Keluaran |
+|---:|---|---|
+| 3 | `stgcn_mmew_extraction.ipynb` | `stgcn/stgcn_mmew_landmarks/*.npy` (300 file) |
+| 4 | `stgcn_smic_extraction.ipynb` | `dataset/stgcn_smic_landmarks/*.npy` (164 file) |
+| 5 | `stgcn_mmew_pretraining.ipynb` | `stgcn/stgcn_mmew_pretrained.pth` |
+| 6 | `stgcn_smic_training.ipynb` | metrik LOSO ST-GCN + `stgcn_best_model.pth` |
+
+Notebook 6 **membutuhkan** file dari langkah 4 dan 5.
+
+### Tahap C — R3D-18 (satu notebook, mandiri)
+
+| Urutan | Notebook | Keluaran |
+|---:|---|---|
+| 7 | `r3d18_smic_pipeline.ipynb` | metrik LOSO R3D-18 + `r3d18_best_model.pth` |
+
+Membaca BMP langsung. Tidak bergantung pada landmark atau Optical Flow.
+
+### Tahap D — ViT (satu notebook, dua bagian)
+
+| Urutan | Notebook | Keluaran |
+|---:|---|---|
+| 8 | `vit_optical_flow_pipeline.ipynb` | JPG flow (164) lalu metrik LOSO ViT + `vit_best_model.pth` |
+
+Bagian atas notebook = ekstraksi Farneback. Bagian bawah = LOSO. Jika JPG flow sudah ada, sel ekstraksi boleh dilewati, tetapi sel ImageFolder/LOSO tetap wajib.
+
+### Ringkasan dependensi
+
+```text
+discovery ─────────────────────────────────────────────┐
+                                                       │  (pemahaman data)
+stgcn_mmew_extraction ──► stgcn_mmew_pretraining ──┐   │
+stgcn_smic_extraction ─────────────────────────────┼──► stgcn_smic_training (LOSO)
+                                                   │
+r3d18_smic_pipeline ───────────────────────────────┼──► LOSO R3D-18
+                                                   │
+vit_optical_flow_pipeline ─────────────────────────┴──► LOSO ViT
+```
+
+Ketiga jalur evaluasi memakai **LOSO yang sama** agar angka di tabel hasil dapat dibandingkan.
+
+---
+
+## 8. Hasil evaluasi saat ini
+
+Angka di bawah ini diambil dari **output notebook terakhir** yang tersimpan di repositori (akumulasi 164 prediksi LOSO, epoch terakhir tiap fold).
+
+| Model | Representasi | Accuracy | Macro F1 | UAR |
+|---|---|---:|---:|---:|
+| **ViT-Base** | Optical Flow Farneback 224×224 | **43.90%** | **41.68%** | **41.92%** |
+| **ST-GCN** | Face Mesh 468 node, transfer MMEW | 38.41% | 34.20% | 35.31% |
+| **R3D-18** | Klip RGB 16×112×112, Kinetics-400 | 31.10% | 29.04% | 31.63% |
+
+**Cara membaca tabel**
+
+- **ViT** unggul pada ketiga metrik. Kompresi gerak onset→apex ke satu peta warna ternyata paling informatif pada 164 sampel SMIC.
+- **ST-GCN** di angka ini memakai backbone MMEW (7 kelas) dengan kepala `fc` SMIC yang diinisialisasi ulang. Pre-training MMEW sendiri mencapai Accuracy training **43.00%** (loss 1.4458) pada epoch ke-25 — angka itu **bukan** metrik uji SMIC.
+- **R3D-18** paling rendah. Volume 3D pada 164 klip + resolusi 112 + batch 4 membuat fine-tune Kinetics sulit menyesuaikan ke gerak mikro yang sangat halus.
+
+Karena kelas tidak seimbang, **Macro F1 dan UAR lebih representatif** daripada Accuracy. Chance-level 3 kelas ≈ 33.3%; R3D-18 berada di sekitar itu.
+
+Hyperparameter ringkas yang menghasilkan tabel di atas:
+
+| | ST-GCN | R3D-18 | ViT |
+|---|---|---|---|
+| Optimizer | Adam | Adam | Adam |
+| Learning rate | \(1 \times 10^{-3}\) | \(1 \times 10^{-4}\) | \(1 \times 10^{-4}\) |
+| Weight decay | \(1 \times 10^{-4}\) | \(1 \times 10^{-4}\) | \(1 \times 10^{-4}\) |
+| Batch size | 8 | 4 | 16 |
+| Epoch / fold | 15 | 15 | 15 |
+| Scheduler | ReduceLROnPlateau (mode=max, factor=0.5, patience=3) | sama | sama |
+
+---
+
+## 9. Catatan teknis penting
+
+- **`T = 16` wajib.** ST-GCN, R3D-18, dan sampling ViT memakai panjang temporal yang sama agar protokol sebanding. `np.linspace(0, L-1, 16)` menjamin onset dan offset ikut terwakili. Jika \(L < 16\), beberapa indeks berulang (padding implisit).
+- **Pose Normalization dimatikan** (`USE_POSE_NORMALIZATION = False`). Ablasi pada SMIC menunjukkan Macro F1 turun jika landmark dikurangi koordinat hidung, karena frame sudah `reg_*.bmp`.
+- **Transfer MMEW → SMIC:** filter `if not key.startswith('fc.')` lalu `load_state_dict(..., strict=False)`. Jangan memuat `fc.weight` 7 kelas ke kepala 3 kelas.
+- **`invert_yaxis()`** pada scatter Face Mesh: koordinat citra `y = 0` di **atas**; Matplotlib default `y = 0` di bawah. Tanpa inversi, wajah tampak terbalik.
+- **`NUM_WORKERS = 0`** di DataLoader. Di macOS/Jupyter, worker > 0 sering deadlock.
+- **Jangan mencampur kernel.** Semua notebook memakai environment `microsense`.
+- Checkpoint `.pth` dan folder `dataset/` tidak ikut Git. Simpan salinan lokal sebelum menghapus environment.
+
+---
+
+## 10. Dependensi
+
+File: `python test/requirements.txt`.
+
+```text
+numpy>=1.23.5,<2.0
+scipy>=1.10.0,<1.14.0
+opencv-python>=4.8.0
+torch>=2.0.0
+torchvision>=0.15.0
+pandas>=1.5.0
+tqdm>=4.64.0
+scikit-learn>=1.3.0
+PyYAML>=6.0
+matplotlib>=3.7.0
+Pillow>=9.5.0
+notebook>=7.0.0
+timm>=0.9.0
+mediapipe>=0.10.0
+```
+
+Instalasi:
+
+```bash
+conda activate microsense
+cd "python test"
+pip install -r requirements.txt
+```

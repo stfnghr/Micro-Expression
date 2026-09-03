@@ -13,6 +13,7 @@ microsense/
 # Dataset lokal
 python test/dataset/
 python test/dataset 1/
+python test/stgcn/stgcn_mmew_landmarks/
 
 # Input dan output pipeline
 python test/input_videos/

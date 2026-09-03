@@ -11,6 +11,7 @@ microsense/
 # Dataset lokal
 dataset/
 dataset 1/
+stgcn/stgcn_mmew_landmarks/
 
 # Input dan output pipeline
 input_videos/
