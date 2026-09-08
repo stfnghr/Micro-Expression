@@ -17,13 +17,14 @@ Workspace eksperimen yang aktif ada di direktori **`python test/`**. README root
 1. [Ringkasan eksperimen](#1-ringkasan-eksperimen)
 2. [Struktur direktori](#2-struktur-direktori)
 3. [Persiapan lingkungan (dari nol)](#3-persiapan-lingkungan-dari-nol)
-4. [Dataset](#4-dataset)
-5. [Protokol evaluasi LOSO](#5-protokol-evaluasi-loso)
-6. [Pipeline per model](#6-pipeline-per-model)
-7. [Urutan eksekusi notebook](#7-urutan-eksekusi-notebook)
-8. [Hasil evaluasi saat ini](#8-hasil-evaluasi-saat-ini)
-9. [Catatan teknis penting](#9-catatan-teknis-penting)
-10. [Dependensi](#10-dependensi)
+4. [Mode lokal vs server (`RUN_ON_SERVER`)](#4-mode-lokal-vs-server-run_on_server)
+5. [Dataset](#5-dataset)
+6. [Protokol evaluasi LOSO](#6-protokol-evaluasi-loso)
+7. [Pipeline per model](#7-pipeline-per-model)
+8. [Urutan eksekusi notebook](#8-urutan-eksekusi-notebook)
+9. [Hasil evaluasi saat ini](#9-hasil-evaluasi-saat-ini)
+10. [Catatan teknis penting](#10-catatan-teknis-penting)
+11. [Dependensi](#11-dependensi)
 
 ---
 
@@ -199,9 +200,71 @@ Kemudian buka notebook dari subfoldernya (`discovery/`, `stgcn/`, `r3d18/`, `vit
 
 ---
 
-## 4. Dataset
+## 4. Mode lokal vs server (`RUN_ON_SERVER`)
 
-### 4.1 SMIC (dataset uji skripsi)
+Satu saklar mengatur epoch, batch size, `num_workers`, patience scheduler, dan flag augmentasi. **Default = lokal** (`False`) agar notebook aman dijalankan di laptop.
+
+### 4.1 Yang diubah: satu baris, di cell kode pertama
+
+Buka notebook, scroll ke **sel kode pertama** (setelah judul Markdown). Cari blok ini, lalu ubah **hanya** baris `RUN_ON_SERVER`:
+
+```python
+# ==========================================
+# KONFIGURASI EKSEKUSI (Lokal vs Server)
+# ==========================================
+RUN_ON_SERVER = False  # Ubah ke True jika dijalankan di server GPU berkapasitas tinggi
+```
+
+| Tempat jalan | Nilai |
+|---|---|
+| Laptop / Mac (Jupyter lokal) | `RUN_ON_SERVER = False` |
+| Server GPU (CUDA, kapasitas tinggi) | `RUN_ON_SERVER = True` |
+
+Setelah diubah, **jalankan ulang cell itu**, lalu Run All ke bawah (atau restart kernel → Run All). Sel akan mencetak `Mode eksekusi : LOKAL` atau `SERVER` beserta dictionary `CFG`.
+
+Notebook di `discovery/` **tidak** punya saklar ini (hanya EDA).
+
+### 4.2 Notebook mana yang harus diubah
+
+Toggle ada di **6 notebook**. Untuk eksperimen training di server, yang **wajib** diubah adalah empat notebook training. Dua notebook ekstraksi cukup diubah jika ingin konsisten (mereka hanya mencetak `CFG`, tidak mengubah jumlah frame/landmark).
+
+| Wajib di server? | Path notebook | Cell | Efek `CFG` |
+|---|---|---|---|
+| **Ya** | `python test/stgcn/stgcn_mmew_pretraining.ipynb` | Cell 1 (setelah import) | `BATCH_SIZE`, `NUM_EPOCHS`, `NUM_WORKERS` |
+| **Ya** | `python test/stgcn/stgcn_smic_training.ipynb` | Cell 1 | `BATCH_SIZE`, `NUM_EPOCHS_PER_FOLD`, `NUM_WORKERS`, `patience` |
+| **Ya** | `python test/r3d18/r3d18_smic_pipeline.ipynb` | Cell 1 | `BATCH_SIZE`, `NUM_EPOCHS_3D`, `NUM_WORKERS`, `patience` |
+| **Ya** | `python test/vit/vit_optical_flow_pipeline.ipynb` | Cell 1 | `BATCH_SIZE`, `NUM_EPOCHS_VIT`, `NUM_WORKERS`, `patience` |
+| Opsional | `python test/stgcn/stgcn_mmew_extraction.ipynb` | Cell 1 | Cetak `CFG` saja |
+| Opsional | `python test/stgcn/stgcn_smic_extraction.ipynb` | Cell 1 | Cetak `CFG` saja |
+
+Tidak ada file `.py` terpisah: **ubah di dalam notebook**, bukan di `requirements.txt` atau README.
+
+### 4.3 Nilai yang aktif otomatis
+
+| Kunci `CFG` | Lokal (`False`) | Server (`True`) |
+|---|---:|---:|
+| `epochs` | 2 | 150 |
+| `batch_size` | 4 | 32 |
+| `use_augmentation` | `False` | `True` |
+| `patience` | 2 | 20 |
+| `num_workers` | 0 | 4 |
+
+Di laptop, epoch=2 hanya untuk smoke-test (pipeline jalan tanpa menunggu berjam-jam). **Angka skripsi / sidang** harus dijalankan dengan `RUN_ON_SERVER = True` (atau setara: epoch penuh seperti di tabel hasil bagian 9).
+
+`use_augmentation` sudah ter-export ke variabel `USE_AUGMENTATION`. Jika pipeline augmentasi belum terhubung ke DataLoader, flag ini siap dipakai tanpa mengubah saklar lagi.
+
+### 4.4 Urutan praktis di server
+
+1. Aktifkan environment dan buka Jupyter di folder `python test/` (lihat bagian 3).
+2. Set `RUN_ON_SERVER = True` di **empat notebook training** pada tabel di atas.
+3. Jalankan notebook sesuai [urutan eksekusi](#8-urutan-eksekusi-notebook).
+4. Pastikan output cell konfigurasi bertuliskan `Mode eksekusi : SERVER` sebelum loop training dimulai.
+
+---
+
+## 5. Dataset
+
+### 5.1 SMIC (dataset uji skripsi)
 
 | Properti | Nilai |
 |---|---|
@@ -217,7 +280,7 @@ NIR dan VIS **tidak dicampur** ke eksperimen. Keduanya dapat merekam kejadian ya
 
 Unit sampel adalah **satu folder klip**, bukan satu file BMP. Menjadikan setiap frame sebagai sampel independen menghancurkan informasi temporal dan menggandakan label.
 
-### 4.2 MMEW (hanya untuk pre-training ST-GCN)
+### 5.2 MMEW (hanya untuk pre-training ST-GCN)
 
 | Properti | Nilai |
 |---|---|
@@ -230,7 +293,7 @@ Akurasi 43% pada pre-training MMEW adalah **akurasi training-set**, bukan metrik
 
 ---
 
-## 5. Protokol evaluasi LOSO
+## 6. Protokol evaluasi LOSO
 
 **Leave-One-Subject-Out** diimplementasikan dengan `sklearn.model_selection.LeaveOneGroupOut`.
 
@@ -249,9 +312,9 @@ Checkpoint `*_best_model.pth` menyimpan fold dengan akurasi validasi tertinggi *
 
 ---
 
-## 6. Pipeline per model
+## 7. Pipeline per model
 
-### 6.1 ST-GCN (graf Face Mesh)
+### 7.1 ST-GCN (graf Face Mesh)
 
 ST-GCN tidak melihat piksel. Setiap wajah menjadi **graf**: 468 titik MediaPipe Face Mesh sebagai **node**, koneksi `FACEMESH_TESSELATION` sebagai **edge**.
 
@@ -286,7 +349,7 @@ ST-GCN tidak melihat piksel. Setiap wajah menjadi **graf**: 468 titik MediaPipe 
 
 **Notasi tensor (wajib sidang):** file `.npy` = `(T, V, C)`; model = `(C, T, V)`; batch = `(N, C, T, V)` dengan \(N\)=batch, \(C=3\) koordinat \((x,y,z)\), \(T=16\) waktu, \(V=468\) node.
 
-### 6.2 R3D-18 (3D-CNN)
+### 7.2 R3D-18 (3D-CNN)
 
 R3D-18 melihat **volume piksel** sepanjang ruang dan waktu. Backbone ResNet-18 3D diinisialisasi dari **Kinetics-400** (aksi manusia), bukan mikro-ekspresi — tetapi filter 3D sudah peka gerak.
 
@@ -301,7 +364,7 @@ R3D-18 melihat **volume piksel** sepanjang ruang dan waktu. Backbone ResNet-18 3
 7. Ganti `model.fc` dari 400 kelas Kinetics menjadi **3 kelas SMIC**.
 8. Fine-tune Adam **`lr=1e-4`** (10× lebih kecil dari ST-GCN from-scratch agar filter Kinetics tidak rusak), `weight_decay=1e-4`, batch 4, 15 epoch/fold, LOSO.
 
-### 6.3 ViT (Optical Flow + Vision Transformer)
+### 7.3 ViT (Optical Flow + Vision Transformer)
 
 ViT-Base menerima **satu gambar 2D**, bukan video. Gerak temporal dikompresi menjadi warna Optical Flow.
 
@@ -320,7 +383,7 @@ Farneback dipilih (bukan RAFT) karena tersedia di OpenCV tanpa bobot tambahan da
 
 ---
 
-## 7. Urutan eksekusi notebook
+## 8. Urutan eksekusi notebook
 
 Jalankan **berurutan**. Jangan meloncat ke training sebelum ekstraksi selesai. Kernel: `microsense`.
 
@@ -377,7 +440,7 @@ Ketiga jalur evaluasi memakai **LOSO yang sama** agar angka di tabel hasil dapat
 
 ---
 
-## 8. Hasil evaluasi saat ini
+## 9. Hasil evaluasi saat ini
 
 Angka di bawah ini diambil dari **output notebook terakhir** yang tersimpan di repositori (akumulasi 164 prediksi LOSO, epoch terakhir tiap fold).
 
@@ -408,19 +471,19 @@ Hyperparameter ringkas yang menghasilkan tabel di atas:
 
 ---
 
-## 9. Catatan teknis penting
+## 10. Catatan teknis penting
 
 - **`T = 16` wajib.** ST-GCN, R3D-18, dan sampling ViT memakai panjang temporal yang sama agar protokol sebanding. `np.linspace(0, L-1, 16)` menjamin onset dan offset ikut terwakili. Jika \(L < 16\), beberapa indeks berulang (padding implisit).
 - **Pose Normalization dimatikan** (`USE_POSE_NORMALIZATION = False`). Ablasi pada SMIC menunjukkan Macro F1 turun jika landmark dikurangi koordinat hidung, karena frame sudah `reg_*.bmp`.
 - **Transfer MMEW → SMIC:** filter `if not key.startswith('fc.')` lalu `load_state_dict(..., strict=False)`. Jangan memuat `fc.weight` 7 kelas ke kepala 3 kelas.
 - **`invert_yaxis()`** pada scatter Face Mesh: koordinat citra `y = 0` di **atas**; Matplotlib default `y = 0` di bawah. Tanpa inversi, wajah tampak terbalik.
 - **`NUM_WORKERS = 0`** di DataLoader. Di macOS/Jupyter, worker > 0 sering deadlock.
-- **Jangan mencampur kernel.** Semua notebook memakai environment `microsense`.
+- **Saklar `RUN_ON_SERVER`:** ubah di **cell 1** notebook training (lihat [bagian 4](#4-mode-lokal-vs-server-run_on_server)). Jangan mencari file konfigurasi terpisah.
 - Checkpoint `.pth` dan folder `dataset/` tidak ikut Git. Simpan salinan lokal sebelum menghapus environment.
 
 ---
 
-## 10. Dependensi
+## 11. Dependensi
 
 File: `python test/requirements.txt`.
 
