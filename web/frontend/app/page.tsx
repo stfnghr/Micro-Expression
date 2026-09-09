@@ -5,10 +5,20 @@ import { Header } from "@/components/Header";
 import { UploadDropzone } from "@/components/UploadDropzone";
 import { VideoGrid } from "@/components/VideoGrid";
 import { ControlBar } from "@/components/ControlBar";
+import { DownloadButton } from "@/components/DownloadButton";
 import { useSyncVideo } from "@/hooks/useSyncVideo";
 import type { PanelStatus, VideoSources } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function fileIdFromSources(payload: VideoSources): string | null {
+  if (payload.file_id && /^[0-9a-f]{32}$/i.test(payload.file_id)) {
+    return payload.file_id;
+  }
+  const path = payload.original.split("/").pop() ?? "";
+  const stem = path.replace(/\.[^.]+$/, "").replace(/_(r3d18|vit|gcn)$/, "");
+  return /^[0-9a-f]{32}$/i.test(stem) ? stem : null;
+}
 
 function formatElapsed(seconds: number) {
   const safe = Math.max(0, seconds);
@@ -91,6 +101,7 @@ export default function HomePage() {
           vit: toAbsolute(payload.vit),
           gcn: toAbsolute(payload.gcn),
           filename: payload.filename,
+          file_id: fileIdFromSources(payload) ?? undefined,
           processing_time_sec: parsedTime ?? undefined,
         });
         setProcessingTimeSec(
@@ -107,6 +118,9 @@ export default function HomePage() {
 
   const controlsEnabled =
     status === "ready" && Boolean(sources) && duration > 0 && readyCount >= 4;
+  const fileId = sources ? fileIdFromSources(sources) : null;
+  const downloadHref = fileId ? `${API_URL}/download/${fileId}` : null;
+  const downloadEnabled = status === "ready" && Boolean(downloadHref);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-900 bg-grain">
@@ -134,12 +148,15 @@ export default function HomePage() {
           </p>
         ) : null}
 
-        {status === "ready" && processingTimeSec != null ? (
-          <p className="-mb-4 text-center">
-            <span className="inline-flex rounded-full bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-200 ring-1 ring-emerald-300/20">
-              Processed in {processingTimeSec.toFixed(1)}s
-            </span>
-          </p>
+        {status === "ready" && (processingTimeSec != null || downloadEnabled) ? (
+          <div className="-mb-4 flex flex-wrap items-center justify-center gap-2">
+            {processingTimeSec != null ? (
+              <span className="inline-flex rounded-full bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-200 ring-1 ring-emerald-300/20">
+                Processed in {processingTimeSec.toFixed(1)}s
+              </span>
+            ) : null}
+            <DownloadButton href={downloadHref} enabled={downloadEnabled} />
+          </div>
         ) : null}
 
         <VideoGrid
@@ -166,6 +183,8 @@ export default function HomePage() {
           duration={duration}
           speed={speed}
           processingTimeSec={status === "ready" ? processingTimeSec : null}
+          downloadHref={downloadHref}
+          downloadEnabled={downloadEnabled}
           onToggle={toggle}
           onSeek={seek}
           onSpeed={setPlaybackSpeed}

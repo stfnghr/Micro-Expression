@@ -8,6 +8,7 @@ export interface VideoSources {
   vit: string;
   gcn: string;
   filename?: string;
+  file_id?: string;
   processing_time_sec?: number;
 }
 

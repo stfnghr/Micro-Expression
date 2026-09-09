@@ -1,6 +1,7 @@
 "use client";
 
 import { Pause, Play } from "lucide-react";
+import { DownloadButton } from "@/components/DownloadButton";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -11,6 +12,8 @@ interface ControlBarProps {
   duration: number;
   speed: number;
   processingTimeSec?: number | null;
+  downloadHref?: string | null;
+  downloadEnabled?: boolean;
   onToggle: () => void;
   onSeek: (time: number) => void;
   onSpeed: (rate: number) => void;
@@ -30,6 +33,8 @@ export function ControlBar({
   duration,
   speed,
   processingTimeSec,
+  downloadHref,
+  downloadEnabled = false,
   onToggle,
   onSeek,
   onSpeed,
@@ -89,6 +94,10 @@ export function ControlBar({
           <span className="hidden shrink-0 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10px] text-emerald-200 ring-1 ring-emerald-300/20 md:inline">
             Processed in {processingTimeSec.toFixed(1)}s
           </span>
+        ) : null}
+
+        {downloadEnabled ? (
+          <DownloadButton href={downloadHref} enabled compact />
         ) : null}
 
         <button
