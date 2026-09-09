@@ -8,7 +8,7 @@ Tujuannya bukan sekadar “melatih model”, melainkan menjawab pertanyaan metod
 
 LOSO dipakai agar klip orang yang sama tidak pernah muncul di data latih dan data uji sekaligus (**Subject Leakage**). Split acak 80/20 tidak sah pada SMIC karena satu subjek (misalnya `s3`) dapat memiliki puluhan klip.
 
-Workspace eksperimen yang aktif ada di direktori **`python test/`**. README root repositori yang lama (YOLOv5-Face + FER2013) **tidak lagi berlaku**.
+Workspace eksperimen yang aktif ada di direktori **`python test/`**. Dashboard komparatif ada di **`web/`**. README root repositori yang lama (YOLOv5-Face + FER2013) **tidak lagi berlaku**.
 
 ---
 
@@ -25,6 +25,7 @@ Workspace eksperimen yang aktif ada di direktori **`python test/`**. README root
 9. [Hasil evaluasi saat ini](#9-hasil-evaluasi-saat-ini)
 10. [Catatan teknis penting](#10-catatan-teknis-penting)
 11. [Dependensi](#11-dependensi)
+12. [Web dashboard: Real-Time FER Compare](#12-web-dashboard-real-time-fer-compare)
 
 ---
 
@@ -54,7 +55,15 @@ Macro F1 dan UAR wajib dilaporkan karena kelas SMIC **tidak seimbang** (Negative
 
 ## 2. Struktur direktori
 
-Seluruh kode, checkpoint, dan data eksperimen berada di `python test/`. Notebook **harus dijalankan dari folder miliknya sendiri** karena path dataset bersifat relatif (`../dataset/...`).
+Seluruh kode, checkpoint, dan data eksperimen berada di `python test/`. Notebook **harus dijalankan dari folder miliknya sendiri** karena path dataset bersifat relatif (`../dataset/...`). Dashboard web ada di `web/` dan tidak mengubah notebook.
+
+```text
+Micro-Expression-Detector/
+├── python test/                        # eksperimen LOSO (lihat pohon di bawah)
+└── web/                                # dashboard FER Compare
+    ├── frontend/                       # Next.js App Router, TypeScript, Tailwind
+    └── backend/                        # FastAPI + overlay OpenCV/MediaPipe/PyTorch
+```
 
 ```text
 python test/
@@ -109,6 +118,7 @@ python test/
 | `r3d18/` | Pipeline 3D-CNN mandiri. Membaca frame BMP langsung dari `dataset/SMIC_all_cropped/`. |
 | `vit/` | Pipeline Optical Flow + ViT mandiri. Menulis JPG ke `dataset/vit_optical_flow_frames/`. |
 | `dataset/` | Satu atap untuk data mentah dan fitur hasil ekstraksi yang dipakai lintas notebook. |
+| `web/` | Dashboard FER Compare (Next.js + FastAPI). Tidak mengubah notebook. |
 
 Folder `dataset/` dan file `*.pth` diabaikan Git (lihat `.gitignore`) karena ukurannya besar. Setelah clone, dataset harus diletakkan manual ke `python test/dataset/`.
 
@@ -511,3 +521,56 @@ conda activate microsense
 cd "python test"
 pip install -r requirements.txt
 ```
+
+---
+
+## 12. Web dashboard: Real-Time FER Compare
+
+Sebagai pelengkap dari pipeline evaluasi eksperimental, repositori ini menyertakan *dashboard* web komparatif. Modul ini memvisualisasikan hasil deteksi ketiga model (3D-CNN, ViT, ST-GCN) secara *side-by-side* dalam satu pemutar video tersinkronisasi.
+
+**Stack teknologi**
+
+- **Frontend:** Next.js (App Router), TypeScript, Tailwind CSS
+- **Backend:** FastAPI, Python 3.12, OpenCV, MediaPipe, PyTorch
+
+**Fitur utama**
+
+- **Synchronized 2×2 video grid:** memutar 4 video (1 input asli + 3 output model) secara bersamaan dengan satu *master control bar* tanpa *desync*.
+- **Live model overlay:** menggambar *bounding box*, *facial mesh* 468 titik, dan *optical flow* secara *frame-by-frame* berdasarkan prediksi file `.pth` hasil *training*.
+- **Parallel processing:** memproses tiga arsitektur *deep learning* secara bersamaan (*multi-threading*) untuk memangkas waktu *rendering* tanpa membuang *frame*.
+- **Live execution timer:** pelacakan waktu pemrosesan (*latency*) secara *real-time*.
+
+Backend memuat bobot dari `python test/` (`r3d18_best_model.pth`, `vit_best_model.pth`, `stgcn_best_model.pth` / `stgcn_mmew_pretrained.pth`). Jalankan eksperimen training terlebih dahulu agar overlay memakai checkpoint skripsi, bukan heuristik cadangan.
+
+### Cara menjalankan dashboard
+
+Dibutuhkan dua terminal terpisah untuk *backend* dan *frontend*.
+
+**1. Jalankan backend (FastAPI)**
+
+```bash
+cd web/backend
+python -m venv .venv
+source .venv/bin/activate          # Mac/Linux
+# .venv\Scripts\activate           # Windows
+pip install -r requirements.txt
+
+uvicorn main:app --reload --port 8000 \
+  --reload-exclude 'uploads/*' \
+  --reload-exclude 'models/*' \
+  --reload-exclude '.venv/*'
+```
+
+Gunakan Python **3.12** untuk venv dashboard (bukan 3.9). MediaPipe Tasks mengunduh BlazeFace / Face Landmarker ke `web/backend/models/` pada *overlay* pertama. Jika `ffmpeg` ada di `PATH`, keluaran di-transcode ke H.264 `yuv420p` agar Chrome dapat memutar keempat klip.
+
+**2. Jalankan frontend (Next.js)**
+
+```bash
+cd web/frontend
+npm install
+npm run dev
+```
+
+**3. Akses dashboard**
+
+Buka [http://localhost:3000](http://localhost:3000). *Drag & drop* video `.mp4`, `.avi`, atau `.webm` ke area unggah, lalu tunggu *inference* selesai. Opsional: `NEXT_PUBLIC_API_URL=http://localhost:8000`.

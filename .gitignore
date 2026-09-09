@@ -21,3 +21,9 @@ python test/output_cropped_faces/
 
 # Checkpoint hasil training (weights YOLO .pt tetap dikelola melalui Git LFS)
 *.pth
+
+# FER dashboard
+web/frontend/node_modules/
+web/frontend/.next/
+web/backend/.venv/
+web/backend/uploads/
