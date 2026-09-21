@@ -390,23 +390,23 @@ Kemudian buka notebook dari subfoldernya (`discovery/`, `stgcn/`, `r3d18/`, `vit
 
 ## 4. Mode lokal vs server (`RUN_ON_SERVER`)
 
-Satu saklar mengatur epoch, batch size, `num_workers`, patience scheduler, dan flag augmentasi. **Default = lokal** (`False`) agar notebook aman dijalankan di laptop.
+Satu saklar mengatur epoch, batch size, `num_workers`, patience scheduler, dan flag augmentasi. **Default di repositori GitHub = server** (`RUN_ON_SERVER = True`) agar clone langsung siap training penuh di GPU. Untuk smoke-test di laptop, ubah ke `False`.
 
 ### 4.1 Yang diubah: satu baris, di cell kode pertama
 
-Buka notebook, scroll ke **sel kode pertama** (setelah judul Markdown). Cari blok ini, lalu ubah **hanya** baris `RUN_ON_SERVER`:
+Buka notebook, scroll ke **sel kode pertama** (setelah judul Markdown). Cari blok ini; di repo ini sudah **`True`**. Ubah hanya jika perlu mode laptop:
 
 ```python
 # ==========================================
 # KONFIGURASI EKSEKUSI (Lokal vs Server)
 # ==========================================
-RUN_ON_SERVER = False  # Ubah ke True jika dijalankan di server GPU berkapasitas tinggi
+RUN_ON_SERVER = True  # False = smoke-test laptop; True = server GPU (default repo)
 ```
 
 | Tempat jalan | Nilai |
 |---|---|
-| Laptop / Mac (Jupyter lokal) | `RUN_ON_SERVER = False` |
-| Server GPU (CUDA, kapasitas tinggi) | `RUN_ON_SERVER = True` |
+| Server GPU (CUDA, kapasitas tinggi) — **default clone** | `RUN_ON_SERVER = True` |
+| Laptop / Mac (smoke-test cepat) | `RUN_ON_SERVER = False` |
 
 Setelah diubah, **jalankan ulang cell itu**, lalu Run All ke bawah (atau restart kernel → Run All). Sel akan mencetak `Mode eksekusi : LOKAL` atau `SERVER` beserta dictionary `CFG`.
 
@@ -414,7 +414,7 @@ Notebook di `discovery/` **tidak** punya saklar ini (hanya EDA).
 
 ### 4.2 Notebook mana yang harus diubah
 
-Toggle ada di **6 notebook**. Untuk eksperimen training di server, yang **wajib** diubah adalah empat notebook training. Dua notebook ekstraksi cukup diubah jika ingin konsisten (mereka hanya mencetak `CFG`, tidak mengubah jumlah frame/landmark).
+Toggle ada di **6 notebook** (semuanya sudah `True` di GitHub). Empat notebook training memakai `CFG` penuh; dua notebook ekstraksi hanya mencetak `CFG` (konsisten dengan mode server).
 
 | Wajib di server? | Path notebook | Cell | Efek `CFG` |
 |---|---|---|---|
@@ -444,7 +444,7 @@ Di laptop, epoch=2 hanya untuk smoke-test (pipeline jalan tanpa menunggu berjam-
 ### 4.4 Urutan praktis di server
 
 1. Aktifkan environment dan buka Jupyter di folder `python test/` (lihat bagian 3).
-2. Set `RUN_ON_SERVER = True` di **empat notebook training** pada tabel di atas.
+2. Clone dari GitHub sudah memakai `RUN_ON_SERVER = True`; tidak perlu mengubah manual kecuali smoke-test laptop.
 3. Jalankan notebook sesuai [urutan eksekusi](#8-urutan-eksekusi-notebook).
 4. Pastikan output cell konfigurasi bertuliskan `Mode eksekusi : SERVER` sebelum loop training dimulai.
 
