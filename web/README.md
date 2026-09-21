@@ -17,7 +17,9 @@ web/
 
 ## Cara menjalankan
 
-Dua terminal terpisah. Backend memuat `.pth` dari `python test/`.
+Langkah *copy-paste* dari laptop kosong (clone, venv, `npm install`, penempatan `.pth`, `uvicorn`, `npm run dev`) ada di [README root → Quick Start](../README.md#quick-start).
+
+Dua terminal terpisah. Backend memuat `.pth` dari `python test/` (lihat [langkah 4 Quick Start](../README.md#external-files)).
 
 **1. Backend (FastAPI, port 8000)**
 

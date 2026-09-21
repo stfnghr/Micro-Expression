@@ -14,9 +14,10 @@ Workspace eksperimen yang aktif ada di direktori **`python test/`**. Dashboard k
 
 ## Daftar Isi
 
+0. [🚀 Panduan Instalasi & Eksekusi dari Nol (Quick Start Guide)](#quick-start)
 1. [Ringkasan eksperimen](#1-ringkasan-eksperimen)
 2. [Struktur direktori](#2-struktur-direktori)
-3. [Persiapan lingkungan (dari nol)](#3-persiapan-lingkungan-dari-nol)
+3. [Persiapan lingkungan notebook (Conda / eksperimen LOSO)](#3-persiapan-lingkungan-notebook-conda--eksperimen-loso)
 4. [Mode lokal vs server (`RUN_ON_SERVER`)](#4-mode-lokal-vs-server-run_on_server)
 5. [Dataset](#5-dataset)
 6. [Protokol evaluasi LOSO](#6-protokol-evaluasi-loso)
@@ -26,6 +27,181 @@ Workspace eksperimen yang aktif ada di direktori **`python test/`**. Dashboard k
 10. [Catatan teknis penting](#10-catatan-teknis-penting)
 11. [Dependensi](#11-dependensi)
 12. [Web dashboard: Real-Time FER Compare](#12-web-dashboard-real-time-fer-compare)
+
+---
+
+<a id="quick-start"></a>
+
+## 🚀 Panduan Instalasi & Eksekusi dari Nol (Quick Start Guide)
+
+Panduan ini untuk laptop kosong setelah `git clone`. Salin setiap blok perintah ke terminal, urut dari atas ke bawah. Dua terminal terpisah diperlukan: satu untuk backend, satu untuk frontend.
+
+**Yang perlu terpasang di sistem:**
+
+| Perangkat | Versi yang disarankan | Dipakai untuk |
+|---|---|---|
+| Git | apa saja | mengunduh repositori |
+| Python | **3.12** (jangan 3.9 atau 3.13) | FastAPI + model overlay |
+| Node.js | 18 LTS atau lebih baru (`npm` ikut terpasang) | dashboard Next.js |
+| FFmpeg | opsional, tapi disarankan | agar keempat video overlay bisa diputar di Chrome |
+
+Cek cepat:
+
+```bash
+git --version
+python --version    # Windows: py --version
+node --version
+npm --version
+ffmpeg -version     # boleh gagal; dashboard tetap jalan, video overlay mungkin tidak diputar browser
+```
+
+### 1️⃣ Kloning repositori
+
+```bash
+git clone https://github.com/stfnghr/Micro-Expression.git
+cd Micro-Expression
+```
+
+Folder kerja setelah ini adalah akar repositori (`Micro-Expression/`). Semua perintah di bawah dijalankan relatif ke folder itu, kecuali disebutkan lain.
+
+### 2️⃣ Setup backend (FastAPI & ML)
+
+Buka **terminal 1**, lalu:
+
+```bash
+cd web/backend
+python -m venv .venv
+```
+
+Aktifkan virtual environment sesuai sistem operasi.
+
+**Mac / Linux:**
+
+```bash
+source .venv/bin/activate
+```
+
+**Windows (Command Prompt atau PowerShell):**
+
+```bash
+.venv\Scripts\activate
+```
+
+Setelah prompt menampilkan `(.venv)`, pasang pustaka:
+
+```bash
+pip install -r requirements.txt
+```
+
+Biarkan terminal 1 tetap terbuka dan environment-nya **tetap aktif**. Perintah `uvicorn` di langkah 5 dijalankan di sini.
+
+> Backend dashboard memakai `web/backend/requirements.txt` (FastAPI, Uvicorn, NumPy, MediaPipe, Pillow, PyTorch, torchvision, timm). OpenCV ikut terpasang lewat MediaPipe.
+
+### 3️⃣ Setup frontend (Next.js)
+
+Buka **terminal 2 yang baru** (jangan menimpa terminal backend), lalu:
+
+```bash
+cd web/frontend
+npm install
+```
+
+Biarkan terminal 2 terbuka. `npm run dev` di langkah 5 dijalankan di sini.
+
+### 4️⃣ Penempatan file eksternal (wajib)
+
+<a id="external-files"></a>
+
+Dataset **SMIC**, **MMEW**, dan file bobot **`.pth` tidak ikut ter-push ke GitHub** karena ukurannya besar (lihat `.gitignore`). Setelah clone, folder itu kosong. Tanpa file-file ini, notebook eksperimen akan error, dan overlay dashboard jatuh ke heuristik cadangan (bukan prediksi model skripsi).
+
+Salin berkas dari salinan lokal / drive eksperimen ke **path persis** berikut (nama folder dan nama file harus sama):
+
+```text
+Micro-Expression/
+└── python test/
+    ├── r3d18/
+    │   └── r3d18_best_model.pth          ★ bobot 3D-CNN (dashboard + eksperimen)
+    ├── vit/
+    │   └── vit_best_model.pth            ★ bobot ViT
+    ├── stgcn/
+    │   ├── stgcn_best_model.pth          ★ bobot ST-GCN fine-tune SMIC
+    │   └── stgcn_mmew_pretrained.pth     ★ bobot pre-train MMEW (dipakai dashboard jika ada)
+    └── dataset/
+        ├── SMIC_all_cropped/             ★ dataset uji SMIC
+        │   └── HS/
+        └── MMEW/                         ★ dataset pre-train ST-GCN
+            └── Micro_Expression/
+```
+
+**Dashboard web** hanya wajib memiliki keempat (atau minimal tiga) file `.pth` di atas. Backend membaca path keras:
+
+- `python test/r3d18/r3d18_best_model.pth`
+- `python test/vit/vit_best_model.pth`
+- `python test/stgcn/stgcn_mmew_pretrained.pth` (jika ada; jika tidak, `stgcn_best_model.pth`)
+
+**Notebook eksperimen LOSO** wajib memiliki dataset:
+
+```text
+python test/dataset/SMIC_all_cropped/HS/{subjek}/micro/{negative|positive|surprise}/{id_klip}/reg_*.bmp
+python test/dataset/MMEW/Micro_Expression/{anger|disgust|fear|happiness|others|sadness|surprise}/{Sxx-yy-zzz}/*.jpg
+```
+
+Contoh klip SMIC: `python test/dataset/SMIC_all_cropped/HS/s1/micro/negative/s1_ne_01/reg_00001.bmp`.
+
+Cek cepat apakah bobot sudah di tempat (dari akar repositori):
+
+```bash
+ls "python test/r3d18/r3d18_best_model.pth"
+ls "python test/vit/vit_best_model.pth"
+ls "python test/stgcn/stgcn_best_model.pth"
+ls "python test/stgcn/stgcn_mmew_pretrained.pth"
+```
+
+Di Windows PowerShell, ganti `ls` dengan `dir`.
+
+### 5️⃣ Menjalankan aplikasi (booting)
+
+Pastikan file `.pth` sudah diletakkan (langkah 4).
+
+**Terminal 1 — backend** (folder `web/backend`, venv sudah aktif):
+
+```bash
+uvicorn main:app --reload --port 8000 --reload-exclude "uploads/*" --reload-exclude "models/*" --reload-exclude ".venv/*"
+```
+
+Tunggu sampai muncul `Uvicorn running on http://127.0.0.1:8000`.
+
+**Terminal 2 — frontend** (folder `web/frontend`):
+
+```bash
+npm run dev
+```
+
+Tunggu sampai Next.js menampilkan `Local: http://localhost:3000`.
+
+**Browser:** buka [http://localhost:3000](http://localhost:3000). Unggah (drag & drop) video `.mp4`, `.avi`, atau `.webm`. Setelah *inference* selesai, empat pemutar video tersinkronisasi akan tampil; tombol **Download Results (ZIP)** mengunduh ketiga overlay.
+
+Jika frontend tidak menemukan API, set variabel ini sebelum `npm run dev`:
+
+```bash
+# Mac / Linux
+export NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# Windows PowerShell
+$env:NEXT_PUBLIC_API_URL="http://localhost:8000"
+```
+
+**Kalau error umum**
+
+| Gejala | Perbaikan |
+|---|---|
+| `python: command not found` | Mac/Linux: coba `python3 -m venv .venv`. Windows: `py -3.12 -m venv .venv`. |
+| MediaPipe / JAX gagal di Python 3.9 | Buat ulang venv dengan **Python 3.12**. |
+| Overlay tanpa label model / `GET /health` tidak menyebut `weights` | File `.pth` belum ada di path langkah 4. |
+| Video overlay tidak diputar di Chrome | Pasang FFmpeg, lalu unggah ulang (backend men-transcode H.264). |
+| Port 8000 atau 3000 sudah dipakai | Tutup proses lama, atau ganti port dan sesuaikan `NEXT_PUBLIC_API_URL`. |
+
+Untuk **melatih ulang model di Jupyter** (bukan dashboard), lanjut ke [bagian 3](#3-persiapan-lingkungan-notebook-conda--eksperimen-loso). Penjelasan arsitektur, protokol LOSO, dan hasil evaluasi ada di bagian 1–12 di bawah.
 
 ---
 
@@ -120,13 +296,15 @@ python test/
 | `dataset/` | Satu atap untuk data mentah dan fitur hasil ekstraksi yang dipakai lintas notebook. |
 | `web/` | Dashboard FER Compare (Next.js + FastAPI). Tidak mengubah notebook. |
 
-Folder `dataset/` dan file `*.pth` diabaikan Git (lihat `.gitignore`) karena ukurannya besar. Setelah clone, dataset harus diletakkan manual ke `python test/dataset/`.
+Folder `dataset/` dan file `*.pth` diabaikan Git (lihat `.gitignore`) karena ukurannya besar. Setelah clone, letakkan dataset dan bobot secara manual sesuai [Quick Start, langkah 4](#external-files).
 
 ---
 
-## 3. Persiapan lingkungan (dari nol)
+## 3. Persiapan lingkungan notebook (Conda / eksperimen LOSO)
 
-Eksperimen ini dijalankan pada **Conda environment** bernama `microsense`, dengan kernel Jupyter yang sama. Langkah di bawah ini cukup untuk komputer baru (macOS, Linux, atau Windows + Anaconda).
+Bagian ini khusus **notebook eksperimen** di `python test/` (LOSO, ekstraksi, training). Untuk **menjalankan dashboard web** setelah clone, ikuti [Quick Start](#quick-start) di atas — environment Conda `microsense` tidak wajib untuk FastAPI/Next.js.
+
+Eksperimen notebook dijalankan pada **Conda environment** bernama `microsense`, dengan kernel Jupyter yang sama. Langkah di bawah ini cukup untuk komputer baru (macOS, Linux, atau Windows + Anaconda).
 
 ### 3.1 Pasang Conda dan buat environment
 
@@ -540,37 +718,10 @@ Sebagai pelengkap dari pipeline evaluasi eksperimental, repositori ini menyertak
 - **Parallel processing:** memproses tiga arsitektur *deep learning* secara bersamaan (*multi-threading*) untuk memangkas waktu *rendering* tanpa membuang *frame*.
 - **Live execution timer:** pelacakan waktu pemrosesan (*latency*) secara *real-time*.
 
-Backend memuat bobot dari `python test/` (`r3d18_best_model.pth`, `vit_best_model.pth`, `stgcn_best_model.pth` / `stgcn_mmew_pretrained.pth`). Jalankan eksperimen training terlebih dahulu agar overlay memakai checkpoint skripsi, bukan heuristik cadangan.
+Backend memuat bobot dari `python test/` (`r3d18_best_model.pth`, `vit_best_model.pth`, `stgcn_best_model.pth` / `stgcn_mmew_pretrained.pth`). Letakkan file `.pth` sesuai [Quick Start, langkah 4](#external-files) agar overlay memakai checkpoint skripsi, bukan heuristik cadangan.
 
 ### Cara menjalankan dashboard
 
-Dibutuhkan dua terminal terpisah untuk *backend* dan *frontend*.
+Perintah *copy-paste* lengkap (clone → venv → `npm install` → `uvicorn` → `npm run dev`) ada di [🚀 Quick Start](#quick-start). Ringkasan: dua terminal, backend di `http://127.0.0.1:8000`, frontend di [http://localhost:3000](http://localhost:3000).
 
-**1. Jalankan backend (FastAPI)**
-
-```bash
-cd web/backend
-python -m venv .venv
-source .venv/bin/activate          # Mac/Linux
-# .venv\Scripts\activate           # Windows
-pip install -r requirements.txt
-
-uvicorn main:app --reload --port 8000 \
-  --reload-exclude 'uploads/*' \
-  --reload-exclude 'models/*' \
-  --reload-exclude '.venv/*'
-```
-
-Gunakan Python **3.12** untuk venv dashboard (bukan 3.9). MediaPipe Tasks mengunduh BlazeFace / Face Landmarker ke `web/backend/models/` pada *overlay* pertama. Jika `ffmpeg` ada di `PATH`, keluaran di-transcode ke H.264 `yuv420p` agar Chrome dapat memutar keempat klip.
-
-**2. Jalankan frontend (Next.js)**
-
-```bash
-cd web/frontend
-npm install
-npm run dev
-```
-
-**3. Akses dashboard**
-
-Buka [http://localhost:3000](http://localhost:3000). *Drag & drop* video `.mp4`, `.avi`, atau `.webm` ke area unggah, lalu tunggu *inference* selesai. Opsional: `NEXT_PUBLIC_API_URL=http://localhost:8000`.
+Gunakan Python **3.12** untuk venv dashboard (bukan 3.9). MediaPipe Tasks mengunduh BlazeFace / Face Landmarker ke `web/backend/models/` pada *overlay* pertama. Jika `ffmpeg` ada di `PATH`, keluaran di-transcode ke H.264 `yuv420p` agar Chrome dapat memutar keempat klip. Opsional: `NEXT_PUBLIC_API_URL=http://localhost:8000`. `POST /upload` mengembalikan `file_id` dan `processing_time_sec`; `GET /download/{file_id}` mengunduh ketiga overlay sebagai `FER_Results.zip`.
